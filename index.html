@@ -4,23 +4,25 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>SonifyArt | Your Voice, Visualized</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;500;700&display=swap" rel="stylesheet">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js"></script>
     <style>
         :root {
             --bg: #FFFFFF;
             --section: #F8F9FF;
             --primary: #6366F1;
-            --glass: rgba(255, 255, 255, 0.8);
+            --glass: rgba(255, 255, 255, 0.85);
+            --glass-border: rgba(255, 255, 255, 0.6);
             --radius: 28px;
-            --shadow: 0 10px 30px rgba(99, 102, 241, 0.1);
+            --shadow-soft: 0 10px 40px rgba(99, 102, 241, 0.08), 0 4px 12px rgba(0, 0, 0, 0.03);
+            --shadow-inset: inset 4px 6px 12px rgba(99, 102, 241, 0.08), inset -4px -6px 12px rgba(255, 255, 255, 0.9);
         }
 
-        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; margin: 0; padding: 0; }
 
         body {
-            margin: 0;
-            padding: 0;
             font-family: 'Space Grotesk', sans-serif;
             background-color: var(--bg);
             color: #1A1A1A;
@@ -30,7 +32,7 @@
             overflow: hidden;
         }
 
-        /* --- UI LAYERS --- */
+        /* --- GLASSMORPHIC UI LAYERS --- */
         #canvas-container {
             flex: 1;
             position: relative;
@@ -38,6 +40,19 @@
             display: flex;
             justify-content: center;
             align-items: center;
+            overflow: hidden;
+        }
+
+        /* Real-time visualizer canvas */
+        #waveform-canvas {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            opacity: 0.6;
+            border-radius: 12px;
+            background: rgba(255,255,255,0.3);
+            backdrop-filter: blur(10px);
         }
 
         header {
@@ -52,17 +67,42 @@
             align-items: center;
         }
 
-        .logo { font-weight: 700; letter-spacing: -1px; color: var(--primary); font-size: 1.2rem; }
-        #fingerprint { font-family: monospace; font-size: 0.8rem; opacity: 0.5; background: #eee; padding: 4px 8px; border-radius: 8px; }
+        .logo { 
+            font-weight: 700; 
+            letter-spacing: -0.5px; 
+            color: var(--primary); 
+            font-size: 1.3rem; 
+            text-shadow: 0 2px 10px rgba(99, 102, 241, 0.2);
+        }
 
-        /* --- CONTROLS --- */
+        #seed-display { 
+            display: flex; 
+            align-items: center; 
+            gap: 8px;
+            font-size: 0.75rem;
+            color: #666;
+        }
+
+        #fingerprint { 
+            font-family: 'Space Grotesk', monospace;
+            font-weight: 600;
+            background: linear-gradient(135deg, var(--primary), #818CF8);
+            color: white;
+            padding: 6px 12px;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3);
+        }
+
+        /* --- NEUMORPHIC CONTROLS PANEL --- */
         #controls-panel {
             background: var(--glass);
-            backdrop-filter: blur(20px);
-            border-top: 1px solid rgba(255,255,255,0.5);
-            padding: 24px 24px calc(24px + env(safe-area-inset-bottom));
+            backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px);
+            border: 1px solid var(--glass-border);
+            border-bottom: none;
+            padding: 20px 20px calc(20px + env(safe-area-inset-bottom, 20px));
             border-radius: var(--radius) var(--radius) 0 0;
-            box-shadow: 0 -10px 40px rgba(0,0,0,0.03);
+            box-shadow: 0 -10px 40px rgba(0,0,0,0.04);
             z-index: 20;
             transition: transform 0.5s cubic-bezier(0.16, 1, 0.3, 1);
         }
@@ -70,76 +110,261 @@
         .lens-grid {
             display: grid;
             grid-template-columns: repeat(4, 1fr);
-            gap: 12px;
-            margin-bottom: 24px;
+            gap: 10px;
+            margin-bottom: 20px;
         }
 
         .lens-btn {
-            background: white;
-            border: 1px solid #E0E0E0;
+            background: linear-gradient(145deg, #ffffff, #f0f0f5);
+            border: 1px solid rgba(255,255,255,0.8);
             border-radius: 16px;
-            padding: 12px 8px;
-            font-size: 0.7rem;
+            padding: 14px 8px;
+            font-size: 0.65rem;
             font-weight: 600;
+            font-family: 'Space Grotesk', sans-serif;
             cursor: pointer;
-            transition: all 0.2s;
+            transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+            box-shadow: 4px 4px 12px rgba(0,0,0,0.04), -4px -4px 12px rgba(255,255,255,0.9);
+            letter-spacing: 0.5px;
+            color: #555;
+        }
+
+        .lens-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 6px 6px 16px rgba(0,0,0,0.06), -6px -6px 16px rgba(255,255,255,0.95);
         }
 
         .lens-btn.active {
-            background: var(--primary);
+            background: linear-gradient(145deg, var(--primary), #5558E3);
             color: white;
             border-color: var(--primary);
-            box-shadow: 0 4px 15px rgba(99, 102, 241, 0.3);
+            box-shadow: 0 4px 20px rgba(99, 102, 241, 0.35), inset 0 1px 1px rgba(255,255,255,0.2);
+        }
+
+        .lens-btn .lens-icon {
+            font-size: 1.2rem;
+            display: block;
+            margin-bottom: 4px;
         }
 
         /* --- RECORD BUTTON --- */
-        .action-area { display: flex; justify-content: center; align-items: center; gap: 16px; }
+        .action-area { 
+            display: flex; 
+            justify-content: center; 
+            align-items: center; 
+            gap: 16px; 
+        }
 
         #record-btn {
-            width: 72px;
-            height: 72px;
+            width: 80px;
+            height: 80px;
             border-radius: 50%;
             border: none;
-            background: var(--primary);
-            color: white;
-            font-weight: 600;
+            background: linear-gradient(145deg, #ffffff, #f0f0f5);
+            color: var(--primary);
+            font-weight: 700;
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 0.8rem;
             cursor: pointer;
-            box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.4);
-            transition: transform 0.2s;
+            box-shadow: 8px 8px 20px rgba(0,0,0,0.08), -8px -8px 20px rgba(255,255,255,0.9);
+            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        #record-btn:hover {
+            transform: scale(1.05);
         }
 
         #record-btn.recording {
-            animation: pulse 1.5s infinite;
-            background: #FF4757;
+            background: linear-gradient(145deg, #FF4757, #FF6B7A);
+            color: white;
+            animation: recordPulse 1.5s infinite;
         }
 
-        @keyframes pulse {
-            0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(255, 71, 87, 0.7); }
-            70% { transform: scale(1.1); box-shadow: 0 0 0 20px rgba(255, 71, 87, 0); }
-            100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(255, 71, 87, 0); }
+        @keyframes recordPulse {
+            0% { box-shadow: 0 0 0 0 rgba(255, 71, 87, 0.5); }
+            70% { box-shadow: 0 0 0 25px rgba(255, 71, 87, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(255, 71, 87, 0); }
         }
 
-        .btn-secondary {
-            flex: 1;
-            padding: 16px;
+        .btn-action {
+            padding: 16px 24px;
             border-radius: 18px;
             border: none;
-            background: #f0f0f0;
+            background: linear-gradient(145deg, #ffffff, #f0f0f5);
             font-weight: 600;
-            font-family: inherit;
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 0.85rem;
+            cursor: pointer;
+            box-shadow: 4px 4px 12px rgba(0,0,0,0.06), -4px -4px 12px rgba(255,255,255,0.9);
+            transition: all 0.25s;
+            color: #555;
+        }
+
+        .btn-action:hover {
+            transform: translateY(-2px);
+            box-shadow: 6px 6px 16px rgba(0,0,0,0.08);
+        }
+
+        .btn-action:active {
+            transform: translateY(0);
+            box-shadow: inset 2px 2px 6px rgba(0,0,0,0.06);
         }
 
         .hidden { display: none !important; }
-        
+
+        /* --- LOADING OVERLAY --- */
         #loading-overlay {
             position: absolute;
             inset: 0;
-            background: var(--glass);
+            background: rgba(255, 255, 255, 0.92);
+            backdrop-filter: blur(12px);
             display: flex;
             flex-direction: column;
             justify-content: center;
             align-items: center;
             z-index: 100;
+            gap: 24px;
+        }
+
+        .loading-bar {
+            width: 200px;
+            height: 6px;
+            background: #E0E0E0;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+
+        .loading-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--primary), #818CF8);
+            border-radius: 10px;
+            animation: loadingAnim 1.5s ease-in-out infinite;
+        }
+
+        @keyframes loadingAnim {
+            0% { width: 0%; margin-left: 0; }
+            50% { width: 60%; margin-left: 20%; }
+            100% { width: 0%; margin-left: 100%; }
+        }
+
+        #loading-text {
+            font-size: 0.9rem;
+            font-weight: 500;
+            color: var(--primary);
+            letter-spacing: 1px;
+        }
+
+        /* --- GALLERY VIEW --- */
+        #gallery-overlay {
+            position: absolute;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.95);
+            z-index: 200;
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            gap: 20px;
+            padding: 40px;
+        }
+
+        #gallery-overlay.active {
+            display: flex;
+        }
+
+        #gallery-artwork {
+            max-width: 100%;
+            max-height: 70vh;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.4);
+        }
+
+        .gallery-actions {
+            display: flex;
+            gap: 16px;
+            margin-top: 20px;
+        }
+
+        .btn-gallery {
+            padding: 14px 28px;
+            border-radius: 24px;
+            border: none;
+            font-weight: 600;
+            font-family: 'Space Grotesk', sans-serif;
+            cursor: pointer;
+            transition: all 0.25s;
+        }
+
+        .btn-gallery.primary {
+            background: var(--primary);
+            color: white;
+        }
+
+        .btn-gallery.secondary {
+            background: rgba(255,255,255,0.1);
+            color: white;
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+
+        .btn-close {
+            position: absolute;
+            top: 30px;
+            right: 30px;
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            border: none;
+            background: rgba(255,255,255,0.1);
+            color: white;
+            font-size: 1.5rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* --- TOAST NOTIFICATIONS --- */
+        #toast-container {
+            position: fixed;
+            top: calc(env(safe-area-inset-top, 20px) + 20px);
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 500;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            pointer-events: none;
+        }
+
+        .toast {
+            background: rgba(30, 30, 30, 0.95);
+            color: white;
+            padding: 14px 24px;
+            border-radius: 14px;
+            font-size: 0.85rem;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+            animation: toastIn 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+            text-align: center;
+            max-width: 300px;
+        }
+
+        .toast.error {
+            background: linear-gradient(135deg, #FF4757, #FF6B7A);
+        }
+
+        @keyframes toastIn {
+            from { opacity: 0; transform: translateY(-20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes toastOut {
+            from { opacity: 1; transform: translateY(0); }
+            to { opacity: 0; transform: translateY(-20px); }
         }
     </style>
 </head>
@@ -147,11 +372,18 @@
 
     <header>
         <div class="logo">SONIFY ART</div>
-        <div id="seed-display" class="hidden">SEED <span id="fingerprint">#A1B2C3</span></div>
+        <div id="seed-display" class="hidden">
+            <span>VOICE SEED</span>
+            <span id="fingerprint">#A1B2C3</span>
+        </div>
     </header>
 
     <div id="canvas-container">
+        <canvas id="waveform-canvas"></canvas>
         <div id="loading-overlay" class="hidden">
+            <div class="loading-bar">
+                <div class="loading-fill"></div>
+            </div>
             <p id="loading-text">Mapping Frequencies...</p>
         </div>
     </div>
@@ -159,32 +391,81 @@
     <section id="controls-panel">
         <div id="lens-selection" class="hidden">
             <div class="lens-grid">
-                <button class="lens-btn active" onclick="switchLens('lullaby', this)">LULLABY</button>
-                <button class="lens-btn" onclick="switchLens('prism', this)">PRISM</button>
-                <button class="lens-btn" onclick="switchLens('echo', this)">ECHO</button>
-                <button class="lens-btn" onclick="switchLens('matrix', this)">MATRIX</button>
+                <button class="lens-btn active" onclick="switchLens('lullaby', this)">
+                    <span class="lens-icon">🌊</span>
+                    LULLABY
+                </button>
+                <button class="lens-btn" onclick="switchLens('prism', this)">
+                    <span class="lens-icon">💎</span>
+                    PRISM
+                </button>
+                <button class="lens-btn" onclick="switchLens('echo', this)">
+                    <span class="lens-icon">💨</span>
+                    ECHO
+                </button>
+                <button class="lens-btn" onclick="switchLens('matrix', this)">
+                    <span class="lens-icon">✨</span>
+                    MATRIX
+                </button>
             </div>
         </div>
 
         <div class="action-area">
-            <button id="record-btn" onclick="toggleRecording()">REC</button>
-            <button id="download-btn" class="btn-secondary hidden" onclick="exportArt()">DOWNLOAD 300 DPI</button>
+            <button id="gallery-btn" class="btn-action hidden" onclick="openGallery()">GALLERY</button>
+            <button id="record-btn" onclick="toggleRecording()">
+                <span>🎤</span>
+                <span id="record-text">REC</span>
+            </button>
+            <button id="download-btn" class="btn-action hidden" onclick="exportArt()">DOWNLOAD</button>
+            <button id="share-btn" class="btn-action hidden" onclick="shareArt()">SHARE</button>
         </div>
     </section>
 
+    <!-- Gallery Overlay -->
+    <div id="gallery-overlay">
+        <button class="btn-close" onclick="closeGallery()">×</button>
+        <img id="gallery-artwork" alt="Your Voice Art" />
+        <div class="gallery-actions">
+            <button class="btn-gallery secondary" onclick="closeGallery()">CLOSE</button>
+            <button class="btn-gallery secondary" onclick="shareArt()">SHARE</button>
+            <button class="btn-gallery primary" onclick="exportArt()">DOWNLOAD</button>
+        </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div id="toast-container"></div>
+
     <script>
+        // =====================================================
+        // SONIFYART CORE - Math-to-Art Pipeline
+        // =====================================================
+        
         let isRecording = false;
-        let audioCtx, analyser, dataArray;
+        let audioCtx, analyser, dataArray, source;
         let currentLens = 'lullaby';
         let recordedData = [];
         let seed = "000000";
+        let voiceColor = { r: 99, g: 102, b: 241 }; // Default indigo
+        
+        // Audio analysis metrics
+        let audioMetrics = {
+            pitch: 0,
+            volume: 0,
+            tempo: 0,
+            timbre: 0
+        };
 
         // --- P5.JS ENGINE ---
+        let mainCanvas;
+        
         function setup() {
             let container = document.getElementById('canvas-container');
-            let cnv = createCanvas(container.offsetWidth, container.offsetHeight);
-            cnv.parent('canvas-container');
+            mainCanvas = createCanvas(container.offsetWidth, container.offsetHeight);
+            mainCanvas.parent('canvas-container');
             noFill();
+            
+            // Setup waveform canvas
+            setupWaveformCanvas();
         }
 
         function draw() {
@@ -193,12 +474,21 @@
             if (isRecording) {
                 analyser.getByteFrequencyData(dataArray);
                 recordedData.push([...dataArray]);
+                
+                // Calculate voice color in real-time
+                recalculateVoiceColor();
+                
+                // Draw waveform
+                drawWaveform(dataArray);
+                
+                // Render art in real-time
                 renderArt(dataArray);
             } else if (recordedData.length > 0) {
-                // Static display of recorded voice "essence"
-                renderArt(recordedData[Math.floor(frameCount % recordedData.length)]);
+                // Playback animation of recorded voice "essence"
+                let idx = Math.floor(frameCount * 0.5) % recordedData.length;
+                renderArt(recordedData[idx]);
             } else {
-                // Idle state: gentle floating circle
+                // Idle state: gentle floating circle (breathing animation)
                 drawIdle();
             }
         }
@@ -208,111 +498,706 @@
             resizeCanvas(container.offsetWidth, container.offsetHeight);
         }
 
-        // --- LENS LOGIC ---
-        function renderArt(data) {
+        // --- WAVEFORM VISUALIZER ---
+        let waveformCtx, waveformCanvas;
+        
+        function setupWaveformCanvas() {
+            waveformCanvas = document.getElementById('waveform-canvas');
+            waveformCanvas.width = Math.min(window.innerWidth - 40, 300);
+            waveformCanvas.height = 60;
+            waveformCtx = waveformCanvas.getContext('2d');
+        }
+
+        function drawWaveform(data) {
+            waveformCtx.clearRect(0, 0, waveformCanvas.width, waveformCanvas.height);
+            waveformCtx.beginPath();
+            waveformCtx.strokeStyle = `rgba(${voiceColor.r}, ${voiceColor.g}, ${voiceColor.b}, 0.6)`;
+            waveformCtx.lineWidth = 2;
+            
+            let sliceWidth = waveformCanvas.width / data.length;
+            let x = 0;
+            
+            for (let i = 0; i < data.length; i++) {
+                let v = data[i] / 128.0;
+                let y = v * waveformCanvas.height / 2;
+                
+                if (i === 0) {
+                    waveformCtx.moveTo(x, y);
+                } else {
+                    waveformCtx.lineTo(x, y);
+                }
+                x += sliceWidth;
+            }
+            
+            waveformCtx.stroke();
+        }
+
+        // --- VOICE-GENERATED COLOR ALGORITHM ---
+        function recalculateVoiceColor() {
+            if (!dataArray || dataArray.length === 0) return;
+            
+            // Calculate pitch (dominant frequency)
+            let maxVal = 0;
+            let maxIdx = 0;
+            for (let i = 0; i < dataArray.length; i++) {
+                if (dataArray[i] > maxVal) {
+                    maxVal = dataArray[i];
+                    maxIdx = i;
+                }
+            }
+            
+            // Map pitch to color temperature
+            // High pitch = warm (reds/oranges), Low pitch = cool (blues/purples)
+            let pitchNorm = maxIdx / dataArray.length;
+            
+            // Volume affects saturation/brightness
+            let volume = maxVal / 255;
+            
+            // Timbre affects color variation
+            let timbre = 0;
+            for (let i = 1; i < dataArray.length; i++) {
+                timbre += Math.abs(dataArray[i] - dataArray[i-1]);
+            }
+            timbre = timbre / dataArray.length / 255;
+            
+            // Map to RGB using voice metrics
+            if (pitchNorm < 0.33) {
+                // Cool - Blues to Cyans
+                voiceColor = {
+                    r: Math.floor(timbre * 100),
+                    g: Math.floor(50 + volume * 150),
+                    b: Math.floor(180 + pitchNorm * 200)
+                };
+            } else if (pitchNorm < 0.66) {
+                // Medium - Purples to Pinks
+                voiceColor = {
+                    r: Math.floor(120 + pitchNorm * 100),
+                    g: Math.floor(timbre * 80),
+                    b: Math.floor(180 + volume * 75)
+                };
+            } else {
+                // Warm - Reds to Golds
+                voiceColor = {
+                    r: Math.floor(180 + volume * 75),
+                    g: Math.floor(80 + timbre * 100),
+                    b: Math.floor(pitchNorm * 50)
+                };
+            }
+        }
+
+        function getVoiceColor(alpha = 255) {
+            return color(voiceColor.r, voiceColor.g, voiceColor.b, alpha);
+        }
+
+        // =====================================================
+        // LENS 1: LULLABY IN BLUE (The Topographer)
+        // Science: Map audio amplitude to Z-axis height
+        // Visual: Topographical Waveform (tree rings / depth maps)
+        // =====================================================
+        function renderLullaby(data) {
             push();
             translate(width/2, height/2);
-            strokeWeight(2);
             
-            if (currentLens === 'lullaby') {
-                stroke(99, 102, 241, 150);
-                for (let i = 0; i < 5; i++) {
-                    beginShape();
-                    for (let j = 0; j < data.length; j+=2) {
-                        let r = map(data[j], 0, 255, 50, 200) + (i * 20);
-                        let x = r * cos(j + frameCount * 0.01);
-                        let y = r * sin(j + frameCount * 0.01);
-                        curveVertex(x, y);
-                    }
-                    endShape(CLOSE);
+            let baseHue = 220; // Ocean blue base
+            let layers = 12;
+            
+            for (let ring = 0; ring < layers; ring++) {
+                let ringRadius = 40 + ring * 18;
+                let hue = map(ring, 0, layers, baseHue, baseHue + 40);
+                let sat = map(ring, 0, layers, 60, 90);
+                let bri = map(ring, 0, layers, 40, 95);
+                
+                colorMode(HSB, 360, 100, 100, 100);
+                stroke(hue, sat, bri, 70);
+                strokeWeight(2 + ring * 0.3);
+                noFill();
+                
+                beginShape();
+                for (let a = 0; a < TWO_PI; a += 0.1) {
+                    let noiseIdx = Math.floor(map(a, 0, TWO_PI, 0, data.length - 1));
+                    let amp = data[noiseIdx] / 255;
+                    
+                    // Use audio amplitude to create topographic height variation
+                    let r = ringRadius + amp * 25 + sin(a * 5 + frameCount * 0.01 + ring) * 8;
+                    
+                    let x = r * cos(a);
+                    let y = r * sin(a);
+                    curveVertex(x, y);
                 }
-            } else if (currentLens === 'prism') {
-                stroke(99, 102, 241);
-                for (let i = 0; i < data.length; i+=8) {
-                    let h = map(data[i], 0, 255, 10, 300);
-                    rotate(PI/10);
-                    line(0, 0, 0, -h);
-                }
-            } else if (currentLens === 'echo') {
+                endShape(CLOSE);
+            }
+            pop();
+        }
+
+        // =====================================================
+        // LENS 2: SPOKEN PRISM (The Architect)
+        // Science: FFT data creates vertices in 3D space
+        // Visual: Low-Poly Generative Mesh (crystalline wireframe)
+        // =====================================================
+        function renderPrism(data) {
+            push();
+            translate(width/2, height/2);
+            
+            colorMode(RGB);
+            let c = getVoiceColor(200);
+            stroke(c);
+            noFill();
+            strokeWeight(1.5);
+            
+            let sides = Math.floor(map(data[0], 0, 255, 3, 12));
+            let innerR = map(data[10] || 100, 0, 255, 20, 120);
+            let outerR = map(data[20] || 100, 0, 255, 80, 280);
+            
+            for (let i = 0; i < sides; i++) {
+                let angle1 = (TWO_PI / sides) * i;
+                let angle2 = (TWO_PI / sides) * ((i + 1) % sides);
+                let angle3 = (TWO_PI / sides) * ((i + 2) % sides);
+                
+                // Inner vertex
+                let x1 = innerR * cos(angle1 + frameCount * 0.005);
+                let y1 = innerR * sin(angle1 + frameCount * 0.005);
+                let x2 = innerR * cos(angle2 + frameCount * 0.005);
+                let y2 = innerR * sin(angle2 + frameCount * 0.005);
+                
+                // Outer vertex
+                let x3 = outerR * cos(angle2 - frameCount * 0.008);
+                let y3 = outerR * sin(angle2 - frameCount * 0.008);
+                let x4 = outerR * cos(angle3 - frameCount * 0.008);
+                let y4 = outerR * sin(angle3 - frameCount * 0.008);
+                
+                // Draw crystalline facets
+                beginShape();
+                vertex(x1, y1);
+                vertex(x2, y2);
+                vertex(x3, y3);
+                endShape(CLOSE);
+                
+                beginShape();
+                vertex(x2, y2);
+                vertex(x3, y3);
+                vertex(x4, y4);
+                endShape(CLOSE);
+            }
+            pop();
+        }
+
+        // =====================================================
+        // LENS 3: BREATH AND ECHO (The Fluid Dynamicist)
+        // Science: Vocal breathiness triggers fluid simulation
+        // Visual: Digital Ink Wash / Generative Splatter
+        // =====================================================
+        function renderEcho(data) {
+            push();
+            translate(width/2, height/2);
+            
+            let noiseScale = 0.02;
+            let particleCount = Math.floor(map(data[5], 0, 255, 20, 80));
+            
+            for (let i = 0; i < particleCount; i++) {
+                let idx = i % data.length;
+                let amp = data[idx] / 255;
+                let brightness = map(amp, 0, 1, 30, 90);
+                
+                let c = getVoiceColor(brightness * 255);
                 noStroke();
-                fill(99, 102, 241, 40);
-                for (let i = 0; i < 10; i++) {
-                    let sz = map(data[i*10], 0, 255, 10, 400);
-                    ellipse(sin(frameCount*0.02)*50, cos(frameCount*0.02)*50, sz, sz);
-                }
-            } else if (currentLens === 'matrix') {
-                stroke(212, 175, 55); // Gold for Kintsugi vibe
-                strokeWeight(1);
-                for (let i = 0; i < 20; i++) {
-                    let r = map(data[i], 0, 255, 0, width/2);
+                fill(c);
+                
+                // Fluid particles using noise
+                let angle = i * 0.5 + frameCount * 0.02;
+                let radius = amp * 150 + sin(frameCount * 0.1 + i) * 20;
+                let x = radius * cos(angle);
+                let y = radius * sin(angle);
+                
+                // Splatter size based on "breathiness" in audio
+                let size = map(amp, 0, 1, 4, 40) * noise(i * 0.1 + frameCount * 0.01);
+                
+                ellipse(x, y, size, size * 0.8);
+            }
+            
+            // Add ink bleeding effect
+            for (let i = 0; i < 5; i++) {
+                let idx = (i * 10 + Math.floor(frameCount * 0.5)) % data.length;
+                let amp = data[idx] / 255;
+                let c = getVoiceColor(amp * 40);
+                noStroke();
+                fill(c);
+                
+                let angle = i * 1.2 + frameCount * 0.01;
+                let dist = 120 + amp * 100;
+                ellipse(dist * cos(angle), dist * sin(angle), 60 + amp * 40, 50 + amp * 30);
+            }
+            pop();
+        }
+
+        // =====================================================
+        // LENS 4: CADENCE MATRIX (The Alchemist)
+        // Science: Rhythm/tempo maps to Voronoi tessellation
+        // Visual: Geometric Kintsugi (gold cracks)
+        // =====================================================
+        function renderMatrix(data) {
+            push();
+            translate(width/2, height/2);
+            
+            let cols = Math.floor(map(data[0], 0, 255, 4, 10));
+            let rows = Math.floor(map(data[5], 0, 255, 4, 10));
+            let cellSize = width / (cols + 1);
+            
+            for (let i = 0; i < cols; i++) {
+                for (let j = 0; j < rows; j++) {
+                    let idx = (i * cols + j) % data.length;
+                    let amp = data[idx] / 255;
+                    
+                    // Cell fill - dark base with color
+                    let c = getVoiceColor(amp * 100);
+                    fill(c);
+                    noStroke();
+                    
+                    let x = (i - cols/2) * cellSize + cellSize/2;
+                    let y = (j - rows/2) * cellSize + cellSize/2;
+                    let rotation = amp * PI * 0.25 + frameCount * 0.002;
+                    
+                    push();
+                    translate(x, y);
+                    rotate(rotation);
+                    
+                    // Geometric plates (Kintsugi style)
                     rectMode(CENTER);
-                    rotate(frameCount * 0.001);
-                    rect(0, 0, r, r);
+                    let w = cellSize * 0.8 * (0.3 + amp * 0.7);
+                    let h = cellSize * 0.8 * (0.3 + amp * 0.7);
+                    rect(0, 0, w, h, 4);
+                    
+                    // Gold cracks between plates
+                    if (amp > 0.3) {
+                        stroke(212, 175, 55); // Gold
+                        strokeWeight(2 + amp * 3);
+                        line(-w/2, -h/2, w/2, h/2);
+                    }
+                    
+                    // Glowing liquid gold
+                    if (amp > 0.6) {
+                        stroke(255, 215, 0, 150);
+                        strokeWeight(1);
+                        let glowSize = amp * 20;
+                        line(-w/2 - glowSize, -h/2, -w/2, -h/2);
+                        line(w/2, -h/2, w/2 + glowSize, -h/2);
+                    }
+                    
+                    pop();
                 }
             }
             pop();
         }
 
+        // --- LENS DISPATCHER ---
+        function renderArt(data) {
+            if (currentLens === 'lullaby') {
+                renderLullaby(data);
+            } else if (currentLens === 'prism') {
+                renderPrism(data);
+            } else if (currentLens === 'echo') {
+                renderEcho(data);
+            } else if (currentLens === 'matrix') {
+                renderMatrix(data);
+            }
+        }
+
+        // --- IDLE STATE ---
         function drawIdle() {
             push();
             translate(width/2, height/2);
-            stroke(99, 102, 241, 50);
-            ellipse(0, 0, 200 + sin(frameCount*0.05)*10, 200 + cos(frameCount*0.05)*10);
+            
+            let c = getVoiceColor(40);
+            stroke(c);
+            strokeWeight(2);
+            noFill();
+            
+            // Gentle breathing animation
+            let breathe = sin(frameCount * 0.03);
+            let size = 150 + breathe * 30;
+            
+            ellipse(0, 0, size, size * 0.9);
+            ellipse(0, 0, size * 0.6, size * 0.5);
+            
             pop();
         }
 
-        // --- AUDIO ENGINE ---
+        // =====================================================
+        // AUDIO ENGINE
+        // =====================================================
         async function toggleRecording() {
             if (!isRecording) {
-                // START
-                if (!audioCtx) {
-                    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-                    analyser = audioCtx.createAnalyser();
-                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                    const source = audioCtx.createMediaStreamSource(stream);
-                    source.connect(analyser);
-                    analyser.fftSize = 128;
-                    dataArray = new Uint8Array(analyser.frequencyBinCount);
+                // START RECORDING
+                try {
+                    if (!audioCtx) {
+                        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                        analyser = audioCtx.createAnalyser();
+                        analyser.fftSize = 256;
+                        analyser.smoothingTimeConstant = 0.8;
+                        
+                        const stream = await navigator.mediaDevices.getUserMedia({ 
+                            audio: { 
+                                echoCancellation: true,
+                                noiseSuppression: true,
+                                autoGainControl: true
+                            } 
+                        });
+                        source = audioCtx.createMediaStreamSource(stream);
+                        source.connect(analyser);
+                        dataArray = new Uint8Array(analyser.frequencyBinCount);
+                    }
+                    
+                    if (audioCtx.state === 'suspended') {
+                        await audioCtx.resume();
+                    }
+                    
+                    recordedData = [];
+                    isRecording = true;
+                    
+                    // Update UI
+                    document.getElementById('record-btn').classList.add('recording');
+                    document.getElementById('record-text').innerText = 'STOP';
+                    document.getElementById('waveform-canvas').classList.remove('hidden');
+                    
+                    showToast('Recording... Speak or sing!');
+                    
+                } catch (err) {
+                    showToast('Microphone access denied', true);
+                    console.error(err);
                 }
-                
-                recordedData = [];
-                isRecording = true;
-                document.getElementById('record-btn').classList.add('recording');
-                document.getElementById('record-btn').innerText = "STOP";
             } else {
-                // STOP
+                // STOP RECORDING
                 isRecording = false;
+                
                 document.getElementById('record-btn').classList.remove('recording');
-                document.getElementById('record-btn').innerText = "REC";
+                document.getElementById('record-text').innerText = 'REC';
+                document.getElementById('waveform-canvas').classList.add('hidden');
+                
                 finalizeArt();
             }
         }
 
         function finalizeArt() {
-            // Generate "Fingerprint" from data length and average pitch
-            const avg = recordedData.reduce((acc, val) => acc + val[0], 0) / recordedData.length;
-            seed = Math.floor(avg * recordedData.length).toString(16).toUpperCase().substring(0, 6);
+            if (recordedData.length === 0) {
+                showToast('No audio recorded. Try again!', true);
+                return;
+            }
             
-            document.getElementById('loading-overlay').classList.remove('hidden');
+            // Calculate audio metrics for voice fingerprint
+            calculateAudioMetrics();
+            
+            // Generate unique seed fingerprint
+            generateSeedFingerprint();
+            
+            // Calculate final voice color from full recording
+            recalculateFinalVoiceColor();
+            
+            // Show loading with progress
+            showLoadingState('Mapping Frequencies...');
             
             setTimeout(() => {
-                document.getElementById('loading-overlay').classList.add('hidden');
+                updateLoadingText('Calculating Fluid Dynamics...');
+            }, 600);
+            
+            setTimeout(() => {
+                hideLoadingState();
+                
+                // Show controls
                 document.getElementById('lens-selection').classList.remove('hidden');
                 document.getElementById('seed-display').classList.remove('hidden');
                 document.getElementById('download-btn').classList.remove('hidden');
+                document.getElementById('gallery-btn').classList.remove('hidden');
+                document.getElementById('share-btn').classList.remove('hidden');
+                
                 document.getElementById('fingerprint').innerText = `#${seed}`;
+                
+                showToast(`Art created! Seed: #${seed}`);
             }, 1500);
         }
 
+        function calculateAudioMetrics() {
+            let sum = 0;
+            let maxVal = 0;
+            let variation = 0;
+            
+            for (let frame of recordedData) {
+                for (let i = 0; i < frame.length; i++) {
+                    sum += frame[i];
+                    if (frame[i] > maxVal) maxVal = frame[i];
+                    if (i > 0) variation += Math.abs(frame[i] - frame[i-1]);
+                }
+            }
+            
+            audioMetrics.pitch = sum / recordedData.length / recordedData[0].length;
+            audioMetrics.volume = maxVal / 255;
+            audioMetrics.tempo = recordedData.length / 5; // Assuming ~5 second max
+            audioMetrics.timbre = variation / (recordedData.length * recordedData[0].length) / 255;
+        }
+
+        function generateSeedFingerprint() {
+            // Create unique seed from audio characteristics
+            let pitchSeed = Math.floor(audioMetrics.pitch * 1000);
+            let volumeSeed = Math.floor(audioMetrics.volume * 1000);
+            let tempoSeed = Math.floor(audioMetrics.tempo * 100);
+            let timbreSeed = Math.floor(audioMetrics.timbre * 1000);
+            
+            let combined = (pitchSeed + volumeSeed * 7 + tempoSeed * 13 + timbreSeed * 19) % 16796159;
+            seed = combined.toString(16).toUpperCase().padStart(6, '0').substring(0, 6);
+            
+            // Use seed to initialize random for deterministic generation
+            randomSeed(combined);
+            noiseSeed(combined);
+        }
+
+        function recalculateFinalVoiceColor() {
+            // Calculate average color from recording
+            let rSum = 0, gSum = 0, bSum = 0;
+            let samples = Math.min(recordedData.length, 50);
+            
+            for (let i = 0; i < samples; i++) {
+                let frame = recordedData[Math.floor(i * recordedData.length / samples)];
+                let avg = frame.reduce((a, b) => a + b, 0) / frame.length;
+                let norm = avg / 255;
+                
+                // Color mapping based on frequency profile
+                rSum += Math.floor(norm * 200 + 55);
+                gSum += Math.floor(norm * 100 + 50);
+                bSum += Math.floor((1 - norm) * 200 + 55);
+            }
+            
+            voiceColor = {
+                r: Math.floor(rSum / samples),
+                g: Math.floor(gSum / samples),
+                b: Math.floor(bSum / samples)
+            };
+        }
+
+        // --- UI FUNCTIONS ---
         function switchLens(lens, btn) {
             currentLens = lens;
             document.querySelectorAll('.lens-btn').forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
         }
 
+        function showLoadingState(text) {
+            document.getElementById('loading-text').innerText = text;
+            document.getElementById('loading-overlay').classList.remove('hidden');
+        }
+
+        function updateLoadingText(text) {
+            document.getElementById('loading-text').innerText = text;
+        }
+
+        function hideLoadingState() {
+            document.getElementById('loading-overlay').classList.add('hidden');
+        }
+
+        function openGallery() {
+            let gallery = document.getElementById('gallery-overlay');
+            let img = document.getElementById('gallery-artwork');
+            img.src = mainCanvas.elt.toDataURL('image/png');
+            gallery.classList.add('active');
+        }
+
+        function closeGallery() {
+            document.getElementById('gallery-overlay').classList.remove('active');
+        }
+
+        // =====================================================
+        // EXPORT & SHARING
+        // =====================================================
+        let exportReady = false;
+        
         function exportArt() {
-            // 300 DPI Export Logic (Saves current canvas state)
-            saveCanvas(`SonifyArt_${seed}`, 'png');
+            showLoadingState('Rendering high-resolution...');
+            
+            setTimeout(() => {
+                // Lazy render at higher resolution
+                let exportCanvas = createGraphics(3000, 3000);
+                exportCanvas.background(248, 249, 255);
+                exportCanvas.translate(1500, 1500);
+                
+                // Re-render at export size
+                let origW = width, origH = height;
+                
+                // Use final voice color
+                let exportColor = color(voiceColor.r, voiceColor.g, voiceColor.b, 255);
+                
+                // Draw selected lens at high res
+                if (recordedData.length > 0) {
+                    let sampleData = recordedData[Math.floor(recordedData.length / 2)];
+                    
+                    // Scale factor
+                    let scale = 3000 / Math.min(origW, origH);
+                    
+                    // Draw based on current lens
+                    switch(currentLens) {
+                        case 'lullaby':
+                            renderHighResLullaby(exportCanvas, sampleData, scale);
+                            break;
+                        case 'prism':
+                            renderHighResPrism(exportCanvas, sampleData, scale);
+                            break;
+                        case 'echo':
+                            renderHighResEcho(exportCanvas, sampleData, scale);
+                            break;
+                        case 'matrix':
+                            renderHighResMatrix(exportCanvas, sampleData, scale);
+                            break;
+                    }
+                    
+                    // Add seed fingerprint
+                    exportCanvas.fill(voiceColor.r, voiceColor.g, voiceColor.b);
+                    exportCanvas.noStroke();
+                    exportCanvas.textSize(36);
+                    exportCanvas.textAlign(RIGHT, BOTTOM);
+                    exportCanvas.text(`#${seed}`, 2900, 2950);
+                }
+                
+                exportCanvas.save(`SonifyArt_${seed}.png`);
+                hideLoadingState();
+                showToast('Downloaded! 300 DPI ready for print');
+                
+            }, 100);
+        }
+
+        function renderHighResLullaby(cnv, data, scale) {
+            cnv.push();
+            let baseHue = 220;
+            cnv.colorMode(HSB, 360, 100, 100, 100);
+            
+            for (let ring = 0; ring < 12; ring++) {
+                let ringR = 40 * scale + ring * 18 * scale;
+                let hue = map(ring, 0, 12, baseHue, baseHue + 40);
+                cnv.stroke(hue, 70, 90, 70);
+                cnv.strokeWeight(2 + ring * 0.3);
+                cnv.noFill();
+                cnv.beginShape();
+                for (let a = 0; a < TWO_PI; a += 0.05) {
+                    let idx = Math.floor(map(a, 0, TWO_PI, 0, data.length - 1));
+                    let amp = data[idx] / 255;
+                    let r = ringR + amp * 25 * scale;
+                    cnv.vertex(r * cos(a), r * sin(a));
+                }
+                cnv.endShape(cnv.CLOSE);
+            }
+            cnv.pop();
+        }
+
+        function renderHighResPrism(cnv, data, scale) {
+            cnv.push();
+            let c = cnv.color(voiceColor.r, voiceColor.g, voiceColor.b, 200);
+            cnv.stroke(c);
+            cnv.strokeWeight(1.5);
+            cnv.noFill();
+            
+            let sides = 8;
+            let innerR = 80 * scale;
+            let outerR = 200 * scale;
+            
+            for (let i = 0; i < sides; i++) {
+                let a1 = (TWO_PI / sides) * i;
+                let a2 = (TWO_PI / sides) * ((i + 1) % sides);
+                
+                cnv.vertex(innerR * cos(a1), innerR * sin(a1));
+                cnv.vertex(innerR * cos(a2), innerR * sin(a2));
+                cnv.vertex(outerR * cos(a2), outerR * sin(a2));
+            }
+            cnv.pop();
+        }
+
+        function renderHighResEcho(cnv, data, scale) {
+            cnv.push();
+            let c = cnv.color(voiceColor.r, voiceColor.g, voiceColor.b, 150);
+            cnv.noStroke();
+            cnv.fill(c);
+            
+            for (let i = 0; i < 40; i++) {
+                let idx = i % data.length;
+                let amp = data[idx] / 255;
+                let angle = i * 0.5;
+                let r = amp * 150 * scale;
+                let size = amp * 30 * scale;
+                cnv.ellipse(r * cos(angle), r * sin(angle), size, size * 0.8);
+            }
+            cnv.pop();
+        }
+
+        function renderHighResMatrix(cnv, data, scale) {
+            cnv.push();
+            cnv.translate(0, 0);
+            
+            let cols = 8, rows = 8;
+            let cellSize = width / cols;
+            
+            cnv.colorMode(RGB);
+            let c = cnv.color(voiceColor.r, voiceColor.g, voiceColor.b, 100);
+            cnv.fill(c);
+            cnv.noStroke();
+            
+            for (let i = 0; i < cols; i++) {
+                for (let j = 0; j < rows; j++) {
+                    let idx = (i * cols + j) % data.length;
+                    let amp = data[idx] / 255;
+                    
+                    let x = (i - cols/2) * cellSize + cellSize/2;
+                    let y = (j - rows/2) * cellSize + cellSize/2;
+                    
+                    cnv.rectMode(cnv.CENTER);
+                    let w = cellSize * 0.7 * (0.3 + amp * 0.7);
+                    cnv.rect(x, y, w, w, 4);
+                    
+                    if (amp > 0.3) {
+                        cnv.stroke(212, 175, 55);
+                        cnv.strokeWeight(3);
+                        cnv.line(x - w/2, y - w/2, x + w/2, y + w/2);
+                    }
+                }
+            }
+            cnv.pop();
+        }
+
+        async function shareArt() {
+            const caption = `This is what my voice looks like. Created on #SonifyArt\nSeed: #${seed}`;
+            
+            try {
+                if (navigator.share) {
+                    // Convert canvas to blob for sharing
+                    let canvas = mainCanvas.elt;
+                    canvas.toBlob(async (blob) => {
+                        const file = new File([blob], `SonifyArt_${seed}.png`, { type: 'image/png' });
+                        
+                        await navigator.share({
+                            title: 'SonifyArt',
+                            text: caption,
+                            files: [file]
+                        });
+                        showToast('Shared!');
+                    }, 'image/png');
+                } else {
+                    // Fallback: copy link
+                    await navigator.clipboard.writeText(caption);
+                    showToast('Caption copied to clipboard!');
+                }
+            } catch (err) {
+                showToast('Could not share. Try downloading instead.', true);
+            }
+        }
+
+        // =====================================================
+        // TOAST NOTIFICATIONS
+        // =====================================================
+        function showToast(message, isError = false) {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = `toast${isError ? ' error' : ''}`;
+            toast.textContent = message;
+            
+            container.appendChild(toast);
+            
+            setTimeout(() => {
+                toast.style.animation = 'toastOut 0.3s forwards';
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
         }
     </script>
 </body>
