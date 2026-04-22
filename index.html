@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>SonifyArt | Your Voice, Visualized</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.js"></script>
+</head>
+<body>
+    <div id="app-container">
+        <header>
+            <h1 class="logo">SonifyArt</h1>
+            <div id="seed-badge" class="hidden">Seed: <span id="fingerprint">#000000</span></div>
+        </header>
+
+        <main id="stage">
+            <div id="ui-overlay">
+                <button id="record-btn" class="pulse">Record</button>
+                <p id="status">Tap to capture your frequency</p>
+            </div>
+        </main>
+
+        <section id="controls" class="hidden">
+            <div class="lens-switcher">
+                <button onclick="setLens('lullaby')">Lullaby</button>
+                <button onclick="setLens('prism')">Prism</button>
+                <button onclick="setLens('echo')">Echo</button>
+                <button onclick="setLens('matrix')">Matrix</button>
+            </div>
+            <button id="share-btn">Share to Universe</button>
+        </section>
+    </div>
+    <script src="audio.js"></script>
+    <script src="visualizer.js"></script>
+</body>
+</html>
